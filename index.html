@@ -51,31 +51,48 @@ try{words=JSON.parse(localStorage.getItem('ns_words')||'[]')}catch(e){}
 const uniq=()=>{const m=new Map();words.forEach(w=>{if(!m.has(w.kanji))m.set(w.kanji,w)});return[...m.values()]};
 const save=()=>{try{localStorage.setItem('ns_words',JSON.stringify(words))}catch(e){}};
 /* ---------- Free engine: Tesseract (OCR) + Kuromoji (words, furigana) + JMdict (meanings) ---------- */
-let tk=null,dict=null,dix=null,kix=null,doc=[],pop=null;
+let tkv=null,tk=null,dict=null,dix=null,kix=null,doc=[],pop=null;
 const hira=s=>(s||'').replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-96));
 const hasK=s=>/[\u4e00-\u9fff々]/.test(s);
-const loadTk=()=>tk||(tk=new Promise((ok,no)=>kuromoji.builder({dictPath:'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/'}).build((e,t)=>e?no(e):ok(t))));
-const loadDict=()=>dict||(dict=fetch('data/jmdict.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(j=>{
-  dix=new Map();kix=new Map();
-  for(const e of j.words){
-    const m=e.sense.slice(0,2).map(x=>x.gloss.slice(0,2).map(g=>g.text).join(', ')).join('; '),o={r:e.kana[0].text,m};
-    for(const k of e.kanji||[]){if(!dix.has(k.text))dix.set(k.text,o);for(const c of k.text)if(hasK(c)){let a=kix.get(c);if(!a)kix.set(c,a=[]);if(a.length<40)a.push(o)}}
-    for(const k of e.kana)if(!dix.has(k.text))dix.set(k.text,o);
-  }return true}).catch(()=>null));
+const loadTk=()=>tk||(tk=new Promise((ok,no)=>kuromoji.builder({dictPath:'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/'}).build((e,t)=>e?no(e):(tkv=t,ok(t)))));
+let dictMsg='';
+const tick=()=>new Promise(r=>setTimeout(r));
+const loadDict=()=>dict||(dict=(async()=>{
+  try{
+    const r=await fetch('data/jmdict.json');if(!r.ok)return null;
+    busy='Loading dictionary…';render();
+    const txt=await r.text();
+    if(txt.length>60e6){dictMsg='data/jmdict.json is the FULL dictionary ('+Math.round(txt.length/1e6)+' MB) and is too big for a phone. Use the jmdict-eng-common file instead.';return null}
+    const j=JSON.parse(txt);await tick();
+    const d=new Map(),k2=new Map();let n=0;
+    for(const e of j.words){
+      const m=e.sense.slice(0,2).map(x=>x.gloss.slice(0,2).map(g=>g.text).join(', ')).join('; '),o={r:e.kana[0].text,m};
+      for(const k of e.kanji||[]){if(!d.has(k.text))d.set(k.text,o);for(const c of k.text)if(hasK(c)){let a=k2.get(c);if(!a)k2.set(c,a=[]);if(a.length<40)a.push(o)}}
+      for(const k of e.kana)if(!d.has(k.text))d.set(k.text,o);
+      if(++n%3000===0){busy='Loading dictionary… '+Math.round(n/j.words.length*100)+'%';render();await tick()}
+    }
+    dix=d;kix=k2;return true
+  }catch(e){return null}
+  finally{if(busy&&busy.startsWith('Loading dictionary'))busy=null;render()}
+})());
 function furiTok(t){const s=t.surface_form;if(!hasK(s)||!t.reading||t.reading==='*')return s;
   let r=hira(t.reading),a=s,suf='',pre='';
   while(a.length>1&&r.length>1&&!hasK(a.at(-1))&&a.at(-1)===r.at(-1)){suf=a.at(-1)+suf;a=a.slice(0,-1);r=r.slice(0,-1)}
   while(a.length>1&&r.length>1&&!hasK(a[0])&&a[0]===r[0]){pre+=a[0];a=a.slice(1);r=r.slice(1)}
   return pre+'{'+a+'|'+r+'}'+suf}
+const withTimeout=(p,ms,label)=>Promise.race([p,new Promise((_,no)=>setTimeout(()=>no(new Error(label+' took longer than '+ms/1000+' s and was stopped. Check your connection and try again.')),ms))]);
+window.addEventListener('error',e=>{if(busy){error='Script error: '+e.message;busy=null;render()}});
 const WORDPOS=['名詞','動詞','形容詞','副詞'];
 async function scan(f,text){
   if(!f&&!text)return;error='';
   try{
     if(f){busy='Reading the image (the first time it downloads language data)…';render();
-      const r=await Tesseract.recognize(f,'jpn');
+      let lp=-1;const r=await withTimeout(Tesseract.recognize(f,'jpn',{logger:m=>{const q=Math.round((m.progress||0)*100);if(q!==lp){lp=q;busy='Reading the image: '+m.status+' '+q+'%';render()}}}),240000,'Reading the image');
       text=r.data.text.replace(/(?<=[\u3000-\u9fff]) +(?=[\u3000-\u9fff])/g,'')}
     busy='Splitting words and adding furigana…';render();
-    const [t]=await Promise.all([loadTk(),loadDict()]);
+    busy='Loading the word splitter (first time ~10-30 s)…';render();
+    const t=await withTimeout(loadTk(),90000,'Loading the word splitter');
+    await withTimeout(loadDict(),90000,'Loading the dictionary');
     const toks=t.tokenize(text);
     if(!toks.some(k=>hasK(k.surface_form)))throw new Error('No kanji text found. Try a sharper photo, or copy the text with Google Lens and paste it.');
     doc=toks.map(k=>({s:k.surface_form,f:furiTok(k),b:k.basic_form,r:k.reading}));pop=null;
@@ -88,13 +105,13 @@ async function scan(f,text){
       words.push({kanji:b,reading:e?e.r:hira(k.reading),meaning:e?e.m:'—',distractors:[]});
     }
     save();tab='words';
-  }catch(e){error=e.message||'Something went wrong.'}
+  }catch(e){error=e.message||'Something went wrong.';if(!tkv)tk=null}
   busy=null;render();
 }
 function tap(i){const t=doc[i],b=t.b&&t.b!=='*'?t.b:t.s,e=dix&&(dix.get(b)||dix.get(t.s));
   pop={s:t.s,b,r:e?e.r:hira(t.r),m:e?e.m:'(no dictionary entry)'};render()}
 const popCard=()=>`<div class="pop"><div style="font-size:22px;font-weight:700">${esc(pop.b)}${pop.b!==pop.s?` <span class="note">(${esc(pop.s)})</span>`:''}</div><div>${esc(pop.r)}</div><div class="note" style="font-size:15px">${esc(pop.m)}</div></div>`;
-render();
+render();loadDict();
 
 const DEMO=[["準備","じゅんび","preparation",["arrangement","planning","practice"]],["経験","けいけん","experience",["experiment","examination","management"]],["約束","やくそく","promise",["reservation","contract","condition"]],["注意","ちゅうい","caution, attention",["intention","meaning","opinion"]],["会議","かいぎ","meeting",["society","council election","discussion class"]],["場合","ばあい","case, situation",["place","combination","opportunity"]],["意味","いみ","meaning",["interest","attention","sense of taste"]],["習慣","しゅうかん","habit, custom",["learning","weekly magazine","exchange"]]].map(([kanji,reading,meaning,distractors])=>({kanji,reading,meaning,distractors}));
 
@@ -152,7 +169,7 @@ ${busy?`<div class="card"><span class="spin"></span>${busy}</div>`:''}${error?`<
 function demo(){const s=new Set(words.map(w=>w.kanji));DEMO.forEach(w=>{if(!s.has(w.kanji))words.push(w)});save();tab='words';render()}
 function vWords(){
   if(!words.length)return`<h1>Words</h1><p class="sub">Nothing here yet. Scan some text first.</p><button class="btn pri" onclick="go('scan')">Go to Scan</button>`;
-  return`<h1>Vocabulary</h1><p class="sub">${words.length} unique words</p>${dix?'':'<p class="err">Dictionary file data/jmdict.json not found, so meanings are empty. See README.</p>'}
+  return`<h1>Vocabulary</h1><p class="sub">${words.length} unique words</p>${dix?'':`<p class="err">${esc(dictMsg||'Dictionary file data/jmdict.json not found, so meanings are empty. See README.')}</p>`}
 ${doc.length?`<div class="card"><div class="note">Text with furigana · tap a word for its meaning</div><div class="txt">${doc.map((t,i)=>`<span class="tk" onclick="tap(${i})">${furi(t.f)}</span>`).join('')}</div>${pop?popCard():''}</div>`:''}
 <div class='seg'>${WF.map((k,n)=>`<button class='${wf===k?'on':''}' onclick='setWF(${n})'>${k==='all'?'All':LBL[k]} ${k==='all'?words.length:words.filter(w=>st(w)===k).length}</button>`).join('')}<button class='${wsort?'on':''}' onclick='wsort=!wsort;render()'>Sort ↕</button></div>
 <div class='card' style='padding:4px 16px'>${wlist()||'<p class=note>No words with this status.</p>'}</div>
