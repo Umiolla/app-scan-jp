@@ -54,8 +54,12 @@ const save=()=>{try{localStorage.setItem('ns_words',JSON.stringify(words))}catch
 let tkv=null,tk=null,dict=null,dix=null,kix=null,doc=[],pop=null;
 const hira=s=>(s||'').replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-96));
 const hasK=s=>/[\u4e00-\u9fff々]/.test(s);
+/* kuromoji's option is dicPath; absolute URLs get mangled by its path.join, so we use a marker and rewrite it in XHR */
+let DICT_BASE='';
+const _xo=XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open=function(m,u,...r){if(typeof u==='string'&&u.startsWith('KURODICT/'))u=DICT_BASE+u.slice(9);return _xo.call(this,m,u,...r)};
 const DICTS=['https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/','https://unpkg.com/kuromoji@0.1.2/dict/','https://cdn.jsdelivr.net/gh/takuyaa/kuromoji.js@master/dict/'];
-const loadTk=()=>tk||(tk=(async()=>{let last;for(const d of DICTS){try{return await withTimeout(new Promise((ok,no)=>kuromoji.builder({dictPath:d}).build((e,t)=>e?no(e):(tkv=t,ok(t)))),40000,'Word splitter ('+new URL(d).host+')')}catch(e){last=e}}throw last})());
+const loadTk=()=>tk||(tk=(async()=>{let last;for(const d of DICTS){try{return await withTimeout(new Promise((ok,no)=>(DICT_BASE=d,kuromoji.builder({dicPath:'KURODICT/'})).build((e,t)=>e?no(e):(tkv=t,ok(t)))),40000,'Word splitter ('+new URL(d).host+')')}catch(e){last=e}}throw last})());
 let dictMsg='';
 const tick=()=>new Promise(r=>setTimeout(r));
 const loadDict=()=>dict||(dict=(async()=>{
