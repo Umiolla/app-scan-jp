@@ -215,7 +215,8 @@ ${doc.length?`<div class="card"><div class="note">Text with furigana · tap a wo
 <button class="btn" onclick="if(confirm('Clear all words?')){words=[];ocr='';Q=null;save();render()}">Clear list</button>`}
 const setWF=n=>{wf=WF[n];wopen=-1;render()};
 const chg=(i,n)=>{setSt(words[i],S[n]);wopen=-1;render()};
-function wlist(){let a=words.map((w,i)=>({w,i})).filter(x=>wf==='all'||st(x.w)===wf);if(wsort)a.sort((p,q)=>ORD[st(p.w)]-ORD[st(q.w)]);
+function wlist(){
+  if(dix){let ch=0;words.forEach(w=>{if(noM(w)){const e=lookup(w.kanji);if(e){w.meaning=e.m;w.reading=e.r;ch=1}}});if(ch)save()}let a=words.map((w,i)=>({w,i})).filter(x=>wf==='all'||st(x.w)===wf);if(wsort)a.sort((p,q)=>ORD[st(p.w)]-ORD[st(q.w)]);
   return a.map(({w,i})=>`<div class='w'><div class='k'>${ruby(w)}</div><div class='m'>${esc(w.meaning)}</div><button class='bd ${st(w)}' onclick='wopen=wopen===${i}?-1:${i};render()'>${LBL[st(w)]}</button><button class='sp' onclick='speak(words[${i}].kanji)' aria-label='Play'>🔊</button></div>${wopen===i?`<div class='stp'>${sb(st(w),n=>`chg(${i},${n})`)}</div>`:''}`).join('')}
 function buildDeck(){rev.deck=words.filter(w=>rev.f==='all'||st(w)===rev.f);rev.i=0;rev.flip=false}
 const setRF=n=>{rev.f=WF[n];buildDeck();render()};
@@ -248,4 +249,4 @@ function pick(n){const q=Q.qs[Q.i],w=q.w;Q.sel=n;
 function resolve(yes){const w=Q.qs[Q.i].w;if(yes)w.st='learnt';w.streak=0;Q.ask=false;save();render()}
 function next(){Q.sel=null;Q.i++;if(Q.i>=Q.qs.length)Q.done=true;render()}
 render();
-</script><p class="note" style="text-align:center;padding:0 16px 8px">Dictionary data: JMdict, © Electronic Dictionary Research and Development Group (CC BY-SA 4.0).</p></body></html>
+</script><p class="note" style="text-align:center;padding:0 16px 8px">Build 8 · Dictionary data: JMdict, © Electronic Dictionary Research and Development Group (CC BY-SA 4.0).</p></body></html>
