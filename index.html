@@ -64,10 +64,10 @@ let dictMsg='';
 const tick=()=>new Promise(r=>setTimeout(r));
 const loadDict=()=>dict||(dict=(async()=>{
   try{
-    const r=await fetch('data/jmdict.json');if(!r.ok)return null;
+    let r=await fetch('data/jmdict.json');if(!r.ok)r=await fetch('jmdict.json');if(!r.ok)return null;
     busy='Loading dictionary…';render();
     const txt=await r.text();
-    if(txt.length>60e6){dictMsg='data/jmdict.json is the FULL dictionary ('+Math.round(txt.length/1e6)+' MB) and is too big for a phone. Use the jmdict-eng-common file instead.';return null}
+    if(txt.length>60e6){dictMsg='jmdict.json is the FULL dictionary ('+Math.round(txt.length/1e6)+' MB) and is too big for a phone. Use the jmdict-eng-common file instead.';return null}
     const j=JSON.parse(txt);await tick();
     const d=new Map(),k2=new Map();let n=0;
     for(const e of j.words){
@@ -174,7 +174,7 @@ ${busy?`<div class="card"><span class="spin"></span>${busy}</div>`:''}${error?`<
 function demo(){const s=new Set(words.map(w=>w.kanji));DEMO.forEach(w=>{if(!s.has(w.kanji))words.push(w)});save();tab='words';render()}
 function vWords(){
   if(!words.length)return`<h1>Words</h1><p class="sub">Nothing here yet. Scan some text first.</p><button class="btn pri" onclick="go('scan')">Go to Scan</button>`;
-  return`<h1>Vocabulary</h1><p class="sub">${words.length} unique words</p>${dix?'':`<p class="err">${esc(dictMsg||'Dictionary file data/jmdict.json not found, so meanings are empty. See README.')}</p>`}
+  return`<h1>Vocabulary</h1><p class="sub">${words.length} unique words</p>${dix?'':`<p class="err">${esc(dictMsg||'Dictionary file jmdict.json not found, so meanings are empty. See README.')}</p>`}
 ${doc.length?`<div class="card"><div class="note">Text with furigana · tap a word for its meaning</div><div class="txt">${doc.map((t,i)=>`<span class="tk" onclick="tap(${i})">${furi(t.f)}</span>`).join('')}</div>${pop?popCard():''}</div>`:''}
 <div class='seg'>${WF.map((k,n)=>`<button class='${wf===k?'on':''}' onclick='setWF(${n})'>${k==='all'?'All':LBL[k]} ${k==='all'?words.length:words.filter(w=>st(w)===k).length}</button>`).join('')}<button class='${wsort?'on':''}' onclick='wsort=!wsort;render()'>Sort ↕</button></div>
 <div class='card' style='padding:4px 16px'>${wlist()||'<p class=note>No words with this status.</p>'}</div>
