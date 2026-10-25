@@ -54,7 +54,8 @@ const save=()=>{try{localStorage.setItem('ns_words',JSON.stringify(words))}catch
 let tkv=null,tk=null,dict=null,dix=null,kix=null,doc=[],pop=null;
 const hira=s=>(s||'').replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-96));
 const hasK=s=>/[\u4e00-\u9fff々]/.test(s);
-const loadTk=()=>tk||(tk=new Promise((ok,no)=>kuromoji.builder({dictPath:'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/'}).build((e,t)=>e?no(e):(tkv=t,ok(t)))));
+const DICTS=['https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/','https://unpkg.com/kuromoji@0.1.2/dict/','https://cdn.jsdelivr.net/gh/takuyaa/kuromoji.js@master/dict/'];
+const loadTk=()=>tk||(tk=(async()=>{let last;for(const d of DICTS){try{return await withTimeout(new Promise((ok,no)=>kuromoji.builder({dictPath:d}).build((e,t)=>e?no(e):(tkv=t,ok(t)))),40000,'Word splitter ('+new URL(d).host+')')}catch(e){last=e}}throw last})());
 let dictMsg='';
 const tick=()=>new Promise(r=>setTimeout(r));
 const loadDict=()=>dict||(dict=(async()=>{
@@ -91,7 +92,7 @@ async function scan(f,text){
       text=r.data.text.replace(/(?<=[\u3000-\u9fff]) +(?=[\u3000-\u9fff])/g,'')}
     busy='Splitting words and adding furigana…';render();
     busy='Loading the word splitter (first time ~10-30 s)…';render();
-    const t=await withTimeout(loadTk(),90000,'Loading the word splitter');
+    const t=await withTimeout(loadTk(),150000,'Loading the word splitter');
     await withTimeout(loadDict(),90000,'Loading the dictionary');
     const toks=t.tokenize(text);
     if(!toks.some(k=>hasK(k.surface_form)))throw new Error('No kanji text found. Try a sharper photo, or copy the text with Google Lens and paste it.');
