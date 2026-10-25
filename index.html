@@ -62,6 +62,12 @@ const DICTS=['https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/','https://unpkg.
 const loadTk=()=>tk||(tk=(async()=>{let last;for(const d of DICTS){try{return await withTimeout(new Promise((ok,no)=>(DICT_BASE=d,kuromoji.builder({dicPath:'KURODICT/'})).build((e,t)=>e?no(e):(tkv=t,ok(t)))),40000,'Word splitter ('+new URL(d).host+')')}catch(e){last=e}}throw last})());
 let dictMsg='';
 const tick=()=>new Promise(r=>setTimeout(r));
+const g1=o=>o.m.split(/[;,]/)[0].trim();
+function lookup(b){
+  if(!dix)return null;const e=dix.get(b);if(e)return e;
+  if(b.length<3||!hasK(b))return null;
+  for(let i=b.length-1;i>=1;i--){const x=dix.get(b.slice(0,i)),y=dix.get(b.slice(i));if(x&&y)return{r:x.r+y.r,m:'≈ '+g1(x)+' + '+g1(y)}}
+  return null}
 async function fetchDict(){
   for(const u of ['jmdict.gz','data/jmdict.gz','jmdict.json','data/jmdict.json']){
     try{const r=await fetch(u);if(!r.ok)continue;
@@ -83,7 +89,7 @@ const loadDict=()=>dict||(dict=(async()=>{
       for(const k of ka)if(!d.has(k))d.set(k,o);
       if(++n%5000===0){busy='Loading dictionary… '+Math.round(n/list.length*100)+'%';render();await tick()}
     }
-    dix=d;kix=k2;return true
+    dix=d;kix=k2;let up=0;words.forEach(w=>{const e=noM(w)&&lookup(w.kanji);if(e){w.meaning=e.m;w.reading=e.r;up++}});if(up)save();return true
   }catch(e){return null}
   finally{if(busy&&busy.startsWith('Loading dictionary'))busy=null;render()}
 })());
@@ -132,14 +138,14 @@ async function scan(f,text){
       if(!hasK(k.surface_form)||!WORDPOS.includes(k.pos)||['非自立','接尾','数'].includes(k.pos_detail_1))continue;
       const b=k.basic_form&&k.basic_form!=='*'?k.basic_form:k.surface_form;
       if(!hasK(b)||seen.has(b))continue;seen.add(b);
-      const e=dix&&dix.get(b);
+      const e=lookup(b);
       words.push({kanji:b,reading:e?e.r:hira(k.reading),meaning:e?e.m:'—',distractors:[]});
     }
     save();tab='words';
   }catch(e){error=e.message||'Something went wrong.';if(!tkv)tk=null}
   busy=null;render();
 }
-function tap(i){const t=doc[i],b=t.b&&t.b!=='*'?t.b:t.s,e=dix&&(dix.get(b)||dix.get(t.s));
+function tap(i){const t=doc[i],b=t.b&&t.b!=='*'?t.b:t.s,e=lookup(b)||lookup(t.s);
   pop={s:t.s,b,r:e?e.r:hira(t.r),m:e?e.m:'(no dictionary entry)'};render()}
 const popCard=()=>`<div class="pop"><div style="font-size:22px;font-weight:700">${esc(pop.b)}${pop.b!==pop.s?` <span class="note">(${esc(pop.s)})</span>`:''}</div><div>${esc(pop.r)}</div><div class="note" style="font-size:15px">${esc(pop.m)}</div></div>`;
 render();loadDict();
@@ -171,10 +177,11 @@ function meaningDistractors(w){
   if(dix&&a.length<3)for(const o of shuf([...dix.values()].slice(0,800)))if(a.length<3)add(o.m);
   return a.slice(0,3);
 }
+const noM=w=>!w.meaning||w.meaning==='—';
 function buildQuiz(kind){
-  const pick=shuf(quizPool()).slice(0,10);
+  const hasM=quizPool().filter(w=>!noM(w)),pool=(kind==='meaning'&&hasM.length>=4)?hasM:quizPool(),pick=shuf(pool).slice(0,10);
   return{kind,i:0,score:0,done:false,sel:null,qs:pick.map((w,n)=>{
-    const t=kind==='mixed'?(n%2?'meaning':'reading'):kind;
+    let t=kind==='mixed'?(n%2?'meaning':'reading'):kind;if(t==='meaning'&&noM(w))t='reading';
     const ans=t==='reading'?w.reading:w.meaning;
     const ds=t==='reading'?readingDistractors(w.reading,uniq()):meaningDistractors(w);
     return{w,t,ans,opts:shuf([ans,...ds])};
