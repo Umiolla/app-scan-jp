@@ -62,19 +62,26 @@ const DICTS=['https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/','https://unpkg.
 const loadTk=()=>tk||(tk=(async()=>{let last;for(const d of DICTS){try{return await withTimeout(new Promise((ok,no)=>(DICT_BASE=d,kuromoji.builder({dicPath:'KURODICT/'})).build((e,t)=>e?no(e):(tkv=t,ok(t)))),40000,'Word splitter ('+new URL(d).host+')')}catch(e){last=e}}throw last})());
 let dictMsg='';
 const tick=()=>new Promise(r=>setTimeout(r));
+async function fetchDict(){
+  for(const u of ['jmdict.gz','data/jmdict.gz','jmdict.json','data/jmdict.json']){
+    try{const r=await fetch(u);if(!r.ok)continue;
+      let b=new Uint8Array(await r.arrayBuffer());
+      if(b[0]===0x1f&&b[1]===0x8b)b=new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+      return new TextDecoder().decode(b)}catch(e){}
+  }return null}
 const loadDict=()=>dict||(dict=(async()=>{
   try{
-    let r=await fetch('data/jmdict.json');if(!r.ok)r=await fetch('jmdict.json');if(!r.ok)return null;
     busy='Loading dictionary…';render();
-    const txt=await r.text();
-    if(txt.length>60e6){dictMsg='jmdict.json is the FULL dictionary ('+Math.round(txt.length/1e6)+' MB) and is too big for a phone. Use the jmdict-eng-common file instead.';return null}
+    const txt=await fetchDict();if(!txt)return null;
+    if(txt.length>60e6){dictMsg='The dictionary file is too big for a phone. Use the compact jmdict.gz made with make-dictionary.html.';return null}
     const j=JSON.parse(txt);await tick();
+    const list=Array.isArray(j)?j:j.words.map(e=>[(e.kanji||[]).map(k=>k.text),e.kana.map(k=>k.text),e.sense.slice(0,2).map(x=>x.gloss.slice(0,2).map(g=>g.text).join(', ')).join('; ')]);
     const d=new Map(),k2=new Map();let n=0;
-    for(const e of j.words){
-      const m=e.sense.slice(0,2).map(x=>x.gloss.slice(0,2).map(g=>g.text).join(', ')).join('; '),o={r:e.kana[0].text,m};
-      for(const k of e.kanji||[]){if(!d.has(k.text))d.set(k.text,o);for(const c of k.text)if(hasK(c)){let a=k2.get(c);if(!a)k2.set(c,a=[]);if(a.length<40)a.push(o)}}
-      for(const k of e.kana)if(!d.has(k.text))d.set(k.text,o);
-      if(++n%3000===0){busy='Loading dictionary… '+Math.round(n/j.words.length*100)+'%';render();await tick()}
+    for(const [ks,ka,m] of list){
+      const o={r:ka[0],m};
+      for(const k of ks){if(!d.has(k))d.set(k,o);for(const c of k)if(hasK(c)){let a=k2.get(c);if(!a)k2.set(c,a=[]);if(a.length<40)a.push(o)}}
+      for(const k of ka)if(!d.has(k))d.set(k,o);
+      if(++n%5000===0){busy='Loading dictionary… '+Math.round(n/list.length*100)+'%';render();await tick()}
     }
     dix=d;kix=k2;return true
   }catch(e){return null}
@@ -87,13 +94,32 @@ function furiTok(t){const s=t.surface_form;if(!hasK(s)||!t.reading||t.reading===
   return pre+'{'+a+'|'+r+'}'+suf}
 const withTimeout=(p,ms,label)=>Promise.race([p,new Promise((_,no)=>setTimeout(()=>no(new Error(label+' took longer than '+ms/1000+' s and was stopped. Check your connection and try again.')),ms))]);
 window.addEventListener('error',e=>{if(busy){error='Script error: '+e.message;busy=null;render()}});
+async function prep(f){
+  const u=URL.createObjectURL(f);
+  const im=await new Promise((r,j)=>{const i=new Image();i.onload=()=>r(i);i.onerror=j;i.src=u});
+  const k=Math.min(3,2800/Math.max(im.width,im.height));
+  const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
+  const g=c.getContext('2d');g.drawImage(im,0,0,c.width,c.height);
+  const d=g.getImageData(0,0,c.width,c.height),a=d.data,h=new Uint32Array(256);
+  for(let i=0;i<a.length;i+=4){const y=(a[i]*.299+a[i+1]*.587+a[i+2]*.114)|0;a[i]=a[i+1]=a[i+2]=y;h[y]++}
+  const n=c.width*c.height;let lo=0,hi=255,t=0;
+  for(;lo<255&&(t+=h[lo])<n*.02;lo++);t=0;for(;hi>0&&(t+=h[hi])<n*.02;hi--);
+  const sc=255/Math.max(1,hi-lo);
+  for(let i=0;i<a.length;i+=4){const v=Math.max(0,Math.min(255,(a[i]-lo)*sc));a[i]=a[i+1]=a[i+2]=v}
+  g.putImageData(d,0,0);URL.revokeObjectURL(u);return c}
+const CJ='[\\u3000-\\u9fff\\uff00-\\uffef]';
+const cleanOcr=t=>t.replace(new RegExp('(?<='+CJ+') +(?='+CJ+')','g'),'')
+  .replace(new RegExp('(?<='+CJ+')\\n(?='+CJ+')','g'),'')
+  .replace(/^[\s\/|\\\\・.,:;'"`\-_=*#~]{1,3}$/gm,'').replace(/\n{3,}/g,'\n\n').trim();
 const WORDPOS=['名詞','動詞','形容詞','副詞'];
 async function scan(f,text){
   if(!f&&!text)return;error='';
   try{
     if(f){busy='Reading the image (the first time it downloads language data)…';render();
-      let lp=-1;const r=await withTimeout(Tesseract.recognize(f,'jpn',{logger:m=>{const q=Math.round((m.progress||0)*100);if(q!==lp){lp=q;busy='Reading the image: '+m.status+' '+q+'%';render()}}}),240000,'Reading the image');
-      text=r.data.text.replace(/(?<=[\u3000-\u9fff]) +(?=[\u3000-\u9fff])/g,'')}
+      const img=await prep(f);let lp=-1;
+      const w=await withTimeout(Tesseract.createWorker('jpn',1,{logger:m=>{const q=Math.round((m.progress||0)*100);if(q!==lp){lp=q;busy='Reading the image: '+m.status+' '+q+'%';render()}}}),240000,'Downloading the Japanese language data');
+      try{await w.setParameters({preserve_interword_spaces:'0',user_defined_dpi:'300'});
+        const r=await withTimeout(w.recognize(img),240000,'Reading the image');text=cleanOcr(r.data.text)}finally{w.terminate()}}
     busy='Splitting words and adding furigana…';render();
     busy='Loading the word splitter (first time ~10-30 s)…';render();
     const t=await withTimeout(loadTk(),150000,'Loading the word splitter');
