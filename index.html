@@ -24,7 +24,7 @@ nav button b{display:block;font-size:20px}nav button.on{color:var(--ac);font-wei
 .big{font-size:44px;font-weight:800;text-align:center;margin:12px 0 4px}.cap{text-align:center;color:var(--mut);font-size:14px;margin-bottom:16px}
 .bar{height:6px;background:var(--bd);border-radius:6px;overflow:hidden;margin-bottom:12px}.bar i{display:block;height:100%;background:var(--ac)}
 .seg{display:flex;gap:8px;margin-bottom:12px}.seg button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--card);font-size:14px}.seg button.on{background:var(--ac);color:var(--acf);border-color:var(--ac)}
-.txt{background:var(--bg);border-radius:10px;padding:10px;font-size:18px;line-height:2.4;white-space:pre-wrap;max-height:60vh;overflow:auto}.txt rt{font-size:10px;color:var(--mut)}select{flex:1;min-width:0;padding:9px 6px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--fg);font:inherit;font-size:14px}.lvt{font-size:11px;font-weight:700;border:1px solid var(--bd);border-radius:6px;padding:0 5px;color:var(--mut)}.tk{cursor:pointer;border-radius:4px}.tk:active{background:var(--bd)}.pop{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--bg);border:1px solid var(--ac);position:sticky;bottom:84px}
+.txt{background:var(--bg);border-radius:10px;padding:10px;font-size:18px;line-height:2.4;white-space:pre-wrap;max-height:60vh;overflow:auto}.txt rt{font-size:10px;color:var(--mut)}select{flex:1;min-width:0;padding:9px 6px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--fg);font:inherit;font-size:14px}.lvt{font-size:11px;font-weight:700;border:1px solid var(--bd);border-radius:6px;padding:0 5px;color:var(--mut)}.tk{cursor:pointer;border-radius:4px}.tk:active{background:var(--bd)}.pop{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--bg);border:1px solid var(--ac);position:sticky;bottom:84px;max-height:50vh;overflow:auto}
 .bd{padding:3px 10px;border-radius:999px;border:1px solid currentColor;font-size:12px;font-weight:600;background:none}.bd.new,.sb.new{color:var(--nw)}.bd.fam,.sb.fam{color:var(--fm)}.bd.learnt,.sb.learnt{color:var(--ok)}
 .stp{display:flex;gap:8px;padding:0 0 12px}.sb{flex:1;padding:12px 4px;border-radius:12px;border:1px solid var(--bd);background:var(--card);font-size:15px;font-weight:600}.sb.on{box-shadow:inset 0 0 0 2px currentColor}
 .fc{min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;cursor:pointer;user-select:none}
@@ -86,7 +86,7 @@ const loadDict=()=>dict||(dict=(async()=>{
     const d=new Map(),k2=new Map();let n=0;
     for(const [ks,ka,m,f] of list){
       const o={r:ka[0],m,f};
-      for(const k of ks){if(!d.has(k))d.set(k,o);for(const c of k)if(hasK(c)){let a=k2.get(c);if(!a)k2.set(c,a=[]);if(a.length<40)a.push(o)}}
+      for(const k of ks){if(!d.has(k))d.set(k,o);for(const c of k)if(hasK(c)){let a=k2.get(c);if(!a)k2.set(c,a=[]);if(a.length<40)a.push({w:k,r:o.r,m:o.m})}}
       for(const k of ka)if(!d.has(k))d.set(k,o);
       if(++n%5000===0){busy='Loading dictionary… '+Math.round(n/list.length*100)+'%';render();await tick()}
     }
@@ -136,6 +136,126 @@ async function loadJlpt(){
   }
   if(got){jl=m;try{localStorage.setItem('ns_jlpt',JSON.stringify(m))}catch(e){}render()}
 }
+let rawText='',popI=-1,editing=false;
+/* ---- kanji details (readings from kanjiapi.dev, examples from the dictionary) ---- */
+const kjc={};
+try{const t=JSON.parse(localStorage.getItem('ns_kj')||'{}');for(const k in t)if(t[k]&&t[k]!=='p')kjc[k]=t[k]}catch(e){}
+function fetchKj(c){if(kjc[c]!==undefined)return;kjc[c]='p';
+  fetch('https://kanjiapi.dev/v1/kanji/'+encodeURIComponent(c)).then(r=>r.ok?r.json():Promise.reject()).then(d=>{kjc[c]=d;try{const o={};for(const k in kjc)if(kjc[k]&&kjc[k]!=='p')o[k]=kjc[k];localStorage.setItem('ns_kj',JSON.stringify(o))}catch(e){}render()}).catch(()=>{kjc[c]=false;render()})}
+function kdet(word){
+  return [...new Set([...word].filter(hasK))].map(c=>{
+    const d=kjc[c];if(d===undefined)fetchKj(c);
+    const rd=d&&d!=='p'?'On: '+((d.on_readings||[]).join('、')||'—')+' · Kun: '+((d.kun_readings||[]).join('、')||'—')+((d.meanings||[]).length?' · '+d.meanings.slice(0,3).join(', '):''):d===false?'readings unavailable (offline?)':'loading readings…';
+    const ex=(kix&&kix.get(c)||[]).filter(e=>e.w!==word&&e.w.length<=3).slice(0,3);
+    return `<div style='margin-top:8px'><b style='font-size:18px'>${esc(c)}</b> <span class='note'>${esc(rd)}</span>${ex.length?`<div class='note'>${ex.map(e=>esc(e.w+' ('+e.r+') '+g1(e))).join(' · ')}</div>`:''}</div>`}).join('')}
+/* ---- themes ---- */
+const TH=[
+ {n:'HR & Labour',s:'HR',j:'人事 労働 雇用 賃金 給与 採用 解雇 組合 就業 勤務 福利 昇進 研修 人材 退職 求人 職員 従業員 報酬 管理 労使 昇給'.split(' '),e:/(employ|labou?r|wage|salary|personnel|recruit|hiring|dismiss|trade union|retire|workforce|staff|pension|promotion|manag)/i},
+ {n:'Economics & Business',s:'Economics',j:'経済 市場 資本 投資 貿易 金融 価格 需要 供給 景気 通貨 利益 税 財政 企業 取引 商業 産業 銀行 株式 貯蓄 消費 契約'.split(' '),e:/(econom|market|capital|invest|trade|financ|price|demand|supply|currency|profit|tax|business|bank|stock|corporat|commerce)/i,f:['econ','finc','bus']},
+ {n:'Psychology',s:'Psychology',j:'心理 精神 感情 行動 認知 意識 性格 動機 不安 記憶 人格 欲求 情緒 態度'.split(' '),e:/(psycholog|mental|emotion|cognit|conscious|personality|motivat|anxiety|behavio|attitude)/i,f:['psy','psych']}];
+const autoTheme=w=>{const t=TH.find(t=>t.j.some(k=>w.kanji.includes(k))||(t.f&&t.f.includes(w.f))||t.e.test(w.meaning||''));return t?t.n:''};
+const subj=w=>w.th||autoTheme(w)||(w.f?fLabel(w.f):'General');
+function setTh(i,n){const w=words[i],t=TH[n].n;if(w.th===t)delete w.th;else w.th=t;save();render()}
+function delW(i){if(!confirm('Remove this word from the list?'))return;const k=words[i].kanji;words.splice(i,1);cur=cur.filter(x=>x!==k);wopen=-1;save();render()}
+/* ---- compounds ---- */
+function mergeToks(toks){
+  if(!dix)return toks;const out=[];
+  for(let i=0;i<toks.length;){
+    let best=0,bs='';
+    if(toks[i].pos==='名詞'&&hasK(toks[i].surface_form)){let s=toks[i].surface_form;
+      for(let j=i+1;j<Math.min(toks.length,i+4)&&toks[j].pos==='名詞';j++){s+=toks[j].surface_form;if(dix.has(s)){best=j-i+1;bs=s}}}
+    if(best>1){const g=toks.slice(i,i+best);out.push({surface_form:bs,basic_form:bs,reading:g.map(t=>t.reading||'').join(''),pos:'名詞',pos_detail_1:'一般',f:g.map(furiTok).join('')});i+=best}
+    else out.push(toks[i++]);
+  }return out}
+function joinNext(){const i=popI;if(i<0||i>=doc.length-1)return;const a=doc[i],b=doc[i+1],s=a.s+b.s;
+  doc.splice(i,2,{s,f:a.f+b.f,b:s,r:(a.r||'')+(b.r||'')});
+  if(hasK(s)){const e=lookup(s);if(!words.some(w=>w.kanji===s))words.push({kanji:s,reading:e?e.r:hira(doc[i].r),meaning:e?e.m:'—',distractors:[],pos:'Noun',f:(e&&e.f)||''});if(!cur.includes(s))cur.push(s);save()}
+  tap(i)}
+/* ---- fix a wrongly read word: type, look-alikes, or draw ---- */
+const SIM='管官 効幼 未末 土士 己已巳 大太犬 日目白 千干 人入八 刀力 方万 自白 午牛 由田申甲 貝見 夫天 右石 問間聞 持待特 係系孫 租組祖 億憶 招紹 投役段 洋羊 令今 東束 旅族 経径 絡給 制製 資貸 働動 関開 労栄 場湯 理里'.split(' ');
+const simOf=c=>[...new Set(SIM.filter(g=>g.includes(c)).join('').split('').filter(x=>x!==c))];
+let fx={off:0,len:0,sel:0,old:''},fcv,fcx;
+const CHB=c=>`<button class='sb' style='flex:none;min-width:46px;font-size:22px' onclick='fxPut("${c}")'>${c}</button>`;
+function openFix(){
+  if(popI<0)return;const t=doc[popI];
+  let off=doc.slice(0,popI).reduce((a,x)=>a+x.s.length,0);
+  if(rawText.substr(off,t.s.length)!==t.s){const k=rawText.indexOf(t.s);if(k<0){alert('Could not locate this word in the text. Use Edit text instead.');return}off=k}
+  fx={off,len:t.s.length,sel:Math.max(0,[...t.s].findIndex(hasK)),old:t.b&&t.b!=='*'?t.b:t.s};
+  document.getElementById('fxi').value=t.s;fxDraw();document.getElementById('fxr').innerHTML='';fxClear();document.getElementById('fxm').style.display='flex'}
+function fxDraw(){const ch=[...document.getElementById('fxi').value];if(fx.sel>=ch.length)fx.sel=0;
+  document.getElementById('fxc').innerHTML=ch.map((c,n)=>`<button class='sb ${n===fx.sel?'on':''}' style='flex:none;min-width:46px;font-size:22px' onclick='fx.sel=${n};fxDraw()'>${esc(c)}</button>`).join('');
+  const sm=simOf(ch[fx.sel]||'');
+  document.getElementById('fxs').innerHTML=sm.length?sm.map(CHB).join(''):'<span class=note>none known: type or draw it</span>'}
+function fxPut(c){const i=document.getElementById('fxi'),ch=[...i.value];ch[fx.sel]=c;i.value=ch.join('');fxDraw()}
+async function fxApply(){const v=document.getElementById('fxi').value;document.getElementById('fxm').style.display='none';
+  if(!v)return;const old=fx.old;rawText=rawText.slice(0,fx.off)+v+rawText.slice(fx.off+fx.len);
+  await scan(null,rawText);
+  if(!doc.some(t=>(t.b&&t.b!=='*'?t.b:t.s)===old)){words=words.filter(w=>w.kanji!==old);cur=cur.filter(x=>x!==old);save();render()}}
+function fxClear(){fcx.fillStyle='#fff';fcx.fillRect(0,0,fcv.width,fcv.height);fcx.strokeStyle='#000';fcx.lineWidth=9;fcx.lineCap='round';fcx.lineJoin='round'}
+async function fxRec(){
+  const out=document.getElementById('fxr');out.innerHTML='<span class=note>Recognising… (the first time it downloads language data)</span>';
+  let w;
+  try{w=await Tesseract.createWorker('jpn',1);await w.setParameters({tessedit_pageseg_mode:'10'});
+    const r=await w.recognize(fcv),c=[];
+    (r.data.symbols||[]).forEach(s=>{c.push(s.text);(s.choices||[]).forEach(x=>c.push(x.text))});
+    String(r.data.text||'').split('').forEach(x=>c.push(x));
+    const u=[...new Set(c.filter(x=>x&&/[\u3040-\u30ff\u4e00-\u9fff]/.test(x)))].slice(0,8);
+    out.innerHTML=u.length?u.map(CHB).join(''):'<span class=note>Nothing recognised. Try again, drawn larger and centred.</span>'
+  }catch(e){out.innerHTML='<span class=note>Could not recognise (offline?).</span>'}finally{if(w)w.terminate()}}
+document.body.insertAdjacentHTML('beforeend',`<div id='fxm' style='display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;align-items:flex-end;justify-content:center'><div style='background:var(--card);color:var(--fg);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px'>
+<h3 style='margin:0 0 8px'>Fix this word</h3>
+<input id='fxi' oninput='fxDraw()' style='width:100%;font-size:22px;padding:10px;border-radius:12px;border:1px solid var(--bd);background:var(--bg);color:var(--fg)'>
+<div class='note' style='margin:8px 0 4px'>Tap a character to replace it</div><div class='stp' id='fxc' style='flex-wrap:wrap'></div>
+<div class='note'>Look-alike kanji</div><div class='stp' id='fxs' style='flex-wrap:wrap'></div>
+<div class='note'>Or draw it</div><canvas id='fxd' width='240' height='240' style='width:240px;height:240px;border:1px solid var(--bd);border-radius:12px;touch-action:none;background:#fff;display:block;margin:6px 0'></canvas>
+<div class='stp'><button class='sb' onclick='fxClear()'>Clear</button><button class='sb' onclick='fxRec()'>Recognise</button></div><div class='stp' id='fxr' style='flex-wrap:wrap'></div>
+<div class='stp'><button class='sb learnt' onclick='fxApply()'>Apply &amp; re-analyse</button><button class='sb' onclick="document.getElementById('fxm').style.display='none'">Cancel</button></div></div></div>`);
+fcv=document.getElementById('fxd');fcx=fcv.getContext('2d');fxClear();
+{let dr=false;const pt=e=>{const r=fcv.getBoundingClientRect();return{x:(e.clientX-r.left)*fcv.width/r.width,y:(e.clientY-r.top)*fcv.height/r.height}};
+fcv.onpointerdown=e=>{dr=true;const p=pt(e);fcx.beginPath();fcx.moveTo(p.x,p.y);fcv.setPointerCapture(e.pointerId);e.preventDefault()};
+fcv.onpointermove=e=>{if(!dr)return;const p=pt(e);fcx.lineTo(p.x,p.y);fcx.stroke()};
+fcv.onpointerup=fcv.onpointercancel=()=>{dr=false}}
+const textBlock=()=>editing?`<textarea id='et' style='min-height:140px;margin-top:8px'>${esc(rawText)}</textarea><div class='stp'><button class='sb learnt' onclick='reanalyse()'>Re-analyse</button><button class='sb' onclick='editing=false;render()'>Cancel</button></div>`
+  :`<div class='txt'>${doc.map((t,i)=>`<span class='tk' onclick='tap(${i})'>${furi(t.f)}</span>`).join('')}</div>${pop?popCard():''}<div class='stp' style='margin-top:8px;padding:0'><button class='sb' onclick='editing=true;pop=null;render()'>✏️ Edit text</button></div>`;
+async function reanalyse(){const t=document.getElementById('et').value;editing=false;await scan(null,t)}
+/* ---- crop before reading (the original photo is never changed) ---- */
+let cr={};
+const crC=()=>document.getElementById('crc');
+function pickImg(f){if(!f)return;const u=URL.createObjectURL(f),im=new Image();im.onload=()=>openCrop(im,u);im.onerror=()=>{URL.revokeObjectURL(u);error='Could not open this image.';render()};im.src=u}
+function openCrop(im,u){
+  const cv=crC(),k=Math.min(Math.min(window.innerWidth-32,528)/im.naturalWidth,window.innerHeight*.6/im.naturalHeight,1);
+  cv.width=Math.round(im.naturalWidth*k);cv.height=Math.round(im.naturalHeight*k);cv.style.width=cv.width+'px';cv.style.height=cv.height+'px';
+  cr={img:im,u,x:cv.width*.06,y:cv.height*.06,w:cv.width*.88,h:cv.height*.88,drag:null};
+  document.getElementById('crm').style.display='flex';crDraw()}
+function crClose(){document.getElementById('crm').style.display='none';if(cr.u)URL.revokeObjectURL(cr.u);cr={}}
+function crDraw(){const cv=crC(),g=cv.getContext('2d'),{img,x,y,w,h}=cr;
+  g.clearRect(0,0,cv.width,cv.height);g.drawImage(img,0,0,cv.width,cv.height);
+  g.fillStyle='rgba(0,0,0,.55)';g.fillRect(0,0,cv.width,y);g.fillRect(0,y+h,cv.width,cv.height-y-h);g.fillRect(0,y,x,h);g.fillRect(x+w,y,cv.width-x-w,h);
+  g.strokeStyle='#fff';g.lineWidth=2;g.strokeRect(x,y,w,h);
+  g.fillStyle='#fb923c';for(const [a,b] of [[x,y],[x+w,y],[x,y+h],[x+w,y+h]]){g.beginPath();g.arc(a,b,11,0,7);g.fill()}}
+function crPt(e){const cv=crC(),r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*cv.width/r.width,y:(e.clientY-r.top)*cv.height/r.height}}
+function crDown(e){const p=crPt(e),{x,y,w,h}=cr,cs=[[x,y],[x+w,y],[x,y+h],[x+w,y+h]];
+  let c=-1,best=36;cs.forEach(([a,b],n)=>{const d=Math.hypot(p.x-a,p.y-b);if(d<best){best=d;c=n}});
+  if(c>=0)cr.drag={t:'c',ox:cs[3-c][0],oy:cs[3-c][1]};
+  else if(p.x>x&&p.x<x+w&&p.y>y&&p.y<y+h)cr.drag={t:'m',dx:p.x-x,dy:p.y-y};
+  else cr.drag=null;
+  if(cr.drag){crC().setPointerCapture(e.pointerId);e.preventDefault()}}
+function crMove(e){const d=cr.drag;if(!d)return;const cv=crC(),p=crPt(e),cl=(v,m)=>Math.max(0,Math.min(m,v));
+  if(d.t==='c'){const nx=cl(p.x,cv.width),ny=cl(p.y,cv.height);
+    if(Math.abs(nx-d.ox)>30&&Math.abs(ny-d.oy)>30){cr.x=Math.min(nx,d.ox);cr.y=Math.min(ny,d.oy);cr.w=Math.abs(nx-d.ox);cr.h=Math.abs(ny-d.oy)}}
+  else{cr.x=cl(p.x-d.dx,cv.width-cr.w);cr.y=cl(p.y-d.dy,cv.height-cr.h)}
+  crDraw()}
+function crGo(whole){
+  const {img,x,y,w,h}=cr,cv=crC(),kx=cv.width/img.naturalWidth,ky=cv.height/img.naturalHeight;
+  const sx=whole?0:x/kx,sy=whole?0:y/ky,sw=whole?img.naturalWidth:w/kx,sh=whole?img.naturalHeight:h/ky;
+  const c=document.createElement('canvas');c.width=Math.max(1,Math.round(sw));c.height=Math.max(1,Math.round(sh));
+  c.getContext('2d').drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
+  crClose();c.toBlob(b=>scan(b),'image/jpeg',.95)}
+document.body.insertAdjacentHTML('beforeend',`<div id='crm' style='display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:60;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:12px'>
+<div style='color:#fff;font-size:14px;text-align:center'>Drag the corners to crop to just the text. Your original photo isn’t changed.</div>
+<canvas id='crc' style='touch-action:none;border-radius:8px'></canvas>
+<div class='stp' style='width:100%;max-width:528px;padding:0'><button class='sb' onclick='crClose()'>Cancel</button><button class='sb' onclick='crGo(1)'>Whole image</button><button class='sb learnt' onclick='crGo(0)'>Read text</button></div></div>`);
+{const cv=crC();cv.onpointerdown=crDown;cv.onpointermove=crMove;cv.onpointerup=cv.onpointercancel=()=>{if(cr.drag)cr.drag=null}}
 const WORDPOS=['名詞','動詞','形容詞','副詞'];
 async function scan(f,text){
   if(!f&&!text)return;error='';
@@ -150,9 +270,9 @@ async function scan(f,text){
     const t=await withTimeout(loadTk(),150000,'Loading the word splitter');
     await withTimeout(loadDict(),90000,'Loading the dictionary');
     words.forEach(w=>{if(!w.pos){try{w.pos=POSMAP[t.tokenize(w.kanji)[0].pos]||'Other'}catch(e){w.pos='Other'}}});
-    const toks=t.tokenize(text);
+    rawText=text;const toks=mergeToks(t.tokenize(text));
     if(!toks.some(k=>hasK(k.surface_form)))throw new Error('No kanji text found. Try a sharper photo, or copy the text with Google Lens and paste it.');
-    doc=toks.map(k=>({s:k.surface_form,f:furiTok(k),b:k.basic_form,r:k.reading}));pop=null;
+    doc=toks.map(k=>({s:k.surface_form,f:k.f||furiTok(k),b:k.basic_form,r:k.reading}));pop=null;
     words=uniq();const seen=new Set(words.map(w=>w.kanji)),curS=new Set();
     for(const k of toks){
       if(!hasK(k.surface_form)||!WORDPOS.includes(k.pos)||['非自立','接尾','数'].includes(k.pos_detail_1))continue;
@@ -167,8 +287,8 @@ async function scan(f,text){
   busy=null;render();
 }
 function tap(i){const t=doc[i],b=t.b&&t.b!=='*'?t.b:t.s,e=lookup(b)||lookup(t.s);
-  pop={s:t.s,b,r:e?e.r:hira(t.r),m:e?e.m:'(no dictionary entry)'};render()}
-const popCard=()=>`<div class="pop"><div style="font-size:22px;font-weight:700">${esc(pop.b)}${pop.b!==pop.s?` <span class="note">(${esc(pop.s)})</span>`:''}</div><div>${esc(pop.r)}</div><div class="note" style="font-size:15px">${esc(pop.m)}</div></div>`;
+  popI=i;pop={s:t.s,b,r:e?e.r:hira(t.r),m:e?e.m:'(no dictionary entry)'};render()}
+const popCard=()=>`<div class='pop'><div style='font-size:22px;font-weight:700'>${esc(pop.b)}${pop.b!==pop.s?` <span class='note'>(${esc(pop.s)})</span>`:''}</div><div>${esc(pop.r)}</div><div class='note' style='font-size:15px'>${esc(pop.m)}</div>${kdet(hasK(pop.b)?pop.b:pop.s)}<div class='stp' style='margin-top:8px;padding:0'><button class='sb' onclick='openFix()'>✏️ Fix</button><button class='sb' onclick='joinNext()'>Join next word</button></div></div>`;
 render();loadDict();loadJlpt();
 
 const DEMO=[["準備","じゅんび","preparation",["arrangement","planning","practice"]],["経験","けいけん","experience",["experiment","examination","management"]],["約束","やくそく","promise",["reservation","contract","condition"]],["注意","ちゅうい","caution, attention",["intention","meaning","opinion"]],["会議","かいぎ","meeting",["society","council election","discussion class"]],["場合","ばあい","case, situation",["place","combination","opportunity"]],["意味","いみ","meaning",["interest","attention","sense of taste"]],["習慣","しゅうかん","habit, custom",["learning","weekly magazine","exchange"]]].map(([kanji,reading,meaning,distractors])=>({kanji,reading,meaning,distractors}));
@@ -219,8 +339,8 @@ function render(){
 }
 const go=t=>{tab=t;error='';if(t==='rev')buildDeck();render()};
 function vScan(){return`<h1>Scan Japanese text</h1><p class="sub">Photograph a page, sign or menu, or pick an image from your gallery.</p>
-<label class="btn pri">📷 Take a photo<input type="file" accept="image/*" capture="environment" onchange="scan(this.files[0])"></label>
-<label class="btn">🖼️ Choose from gallery<input type="file" accept="image/*" onchange="scan(this.files[0])"></label>
+<label class="btn pri">📷 Take a photo<input type="file" accept="image/*" capture="environment" onchange="pickImg(this.files[0]);this.value=''"></label>
+<label class="btn">🖼️ Choose from gallery<input type="file" accept="image/*" onchange="pickImg(this.files[0]);this.value=''"></label>
 ${busy?`<div class="card"><span class="spin"></span>${busy}</div>`:''}${error?`<div class="err">${esc(error)}</div>`:''}
 <div class="card"><div class="note" style="margin-bottom:8px">Or paste Japanese text</div><textarea id="pt" placeholder="日本語のテキストをここに貼り付け…"></textarea><button class="btn pri" style="margin:0" onclick="scan(null,document.getElementById('pt').value.trim())">Analyse pasted text</button></div>
 <button class="btn" onclick="demo()">Try with demo words</button>
@@ -229,7 +349,7 @@ function demo(){const s=new Set(words.map(w=>w.kanji));DEMO.forEach(w=>{if(!s.ha
 function vWords(){
   if(!words.length)return`<h1>Words</h1><p class="sub">Nothing here yet. Scan some text first.</p><button class="btn pri" onclick="go('scan')">Go to Scan</button>`;
   return`<h1>Vocabulary</h1><div class='seg'><button class='${scope==='cur'?'on':''}' onclick='setScope(0)'>This text (${words.filter(w=>cur.includes(w.kanji)).length})</button><button class='${scope==='all'?'on':''}' onclick='setScope(1)'>All words (${words.length})</button></div>${dix?'':`<p class="err">${esc(dictMsg||'Dictionary file jmdict.json not found, so meanings are empty. See README.')}</p>`}
-${doc.length?`<div class="card"><div class="note">Text with furigana · tap a word for its meaning</div><div class="txt">${doc.map((t,i)=>`<span class="tk" onclick="tap(${i})">${furi(t.f)}</span>`).join('')}</div>${pop?popCard():''}</div>`:''}
+${doc.length?`<div class="card"><div class="note">Text with furigana · tap a word for its meaning</div>${textBlock()}</div>`:''}
 <div class='seg'>${WF.map((k,n)=>`<button class='${wf===k?'on':''}' onclick='setWF(${n})'>${k==='all'?'All':LBL[k]} ${k==='all'?sc().length:sc().filter(w=>st(w)===k).length}</button>`).join('')}<button class='${wsort?'on':''}' onclick='wsort=!wsort;render()'>Sort ↕</button></div>
 ${filterUI()}<div class='card' style='padding:4px 16px'>${wlist()||'<p class=note>No words with this status.</p>'}</div>
 <button class="btn pri" onclick="startQuiz('mixed')">Quiz me on these</button>
@@ -241,14 +361,14 @@ const chg=(i,n)=>{setSt(words[i],S[n]);wopen=-1;render()};
 const lvOf=w=>(jl&&jl[w.kanji])||'';
 function shown(){
   if(dix){let ch=0;words.forEach(w=>{if(noM(w)){const e=lookup(w.kanji);if(e){w.meaning=e.m;w.reading=e.r;ch=1}}if(w.f===undefined){const e=lookup(w.kanji);if(e){w.f=e.f||'';ch=1}}});if(ch)save()}
-  const a=words.map((w,i)=>({w,i})).filter(x=>(scope!=='cur'||!cur.length||cur.includes(x.w.kanji))&&(wf==='all'||st(x.w)===wf)&&(fl==='all'||(fl==='none'?!lvOf(x.w):lvOf(x.w)===fl))&&(fp==='all'||(x.w.pos||'Other')===fp)&&(fs==='all'||fLabel(x.w.f)===fs));
+  const a=words.map((w,i)=>({w,i})).filter(x=>(scope!=='cur'||!cur.length||cur.includes(x.w.kanji))&&(wf==='all'||st(x.w)===wf)&&(fl==='all'||(fl==='none'?!lvOf(x.w):lvOf(x.w)===fl))&&(fp==='all'||(x.w.pos||'Other')===fp)&&(fs==='all'||subj(x.w)===fs));
   if(wsort)a.sort((p,q)=>ORD[st(p.w)]-ORD[st(q.w)]);
   return a}
-const row=(w,i)=>`<div class='w'><div class='k'>${ruby(w)}</div><div class='m'>${lvOf(w)?`<span class='lvt'>${lvOf(w)}</span> `:''}${esc(w.meaning)}</div><button class='bd ${st(w)}' onclick='wopen=wopen===${i}?-1:${i};render()'>${LBL[st(w)]}</button><button class='sp' onclick='speak(words[${i}].kanji)' aria-label='Play'>🔊</button></div>${wopen===i?`<div class='stp'>${sb(st(w),n=>`chg(${i},${n})`)}</div>`:''}`;
+const row=(w,i)=>`<div class='w'><div class='k'>${ruby(w)}</div><div class='m'>${lvOf(w)?`<span class='lvt'>${lvOf(w)}</span> `:''}${esc(w.meaning)}</div><button class='bd ${st(w)}' onclick='wopen=wopen===${i}?-1:${i};render()'>${LBL[st(w)]}</button><button class='sp' onclick='speak(words[${i}].kanji)' aria-label='Play'>🔊</button></div>${wopen===i?`<div class='stp'>${sb(st(w),n=>`chg(${i},${n})`)}</div><div class='stp'>${TH.map((t,n)=>`<button class='sb ${(w.th||autoTheme(w))===t.n?'on':''}' onclick='setTh(${i},${n})'>${t.s}</button>`).join('')}<button class='sb' onclick='delW(${i})'>🗑</button></div><div style='padding:0 0 12px'>${kdet(w.kanji)}</div>`:''}`;
 function wlist(){
   const a=shown();if(!a.length)return'';
   if(gb==='none')return a.map(x=>row(x.w,x.i)).join('');
-  const key=w=>gb==='lv'?(lvOf(w)||'Not in JLPT list'):gb==='pos'?(w.pos||'Other'):fLabel(w.f);
+  const key=w=>gb==='lv'?(lvOf(w)||'Not in JLPT list'):gb==='pos'?(w.pos||'Other'):subj(w);
   const g=new Map();a.forEach(x=>{const k=key(x.w);if(!g.has(k))g.set(k,[]);g.get(k).push(x)});
   let ks=[...g.keys()];
   if(gb==='lv')ks.sort((x,y)=>(LV.indexOf(x)<0?9:LV.indexOf(x))-(LV.indexOf(y)<0?9:LV.indexOf(y)));
@@ -257,9 +377,9 @@ function wlist(){
   return ks.map(k=>`<div class='note' style='margin:14px 0 2px;font-weight:700'>${esc(k)} · ${g.get(k).length}</div>`+g.get(k).map(x=>row(x.w,x.i)).join('')).join('')}
 const optH=(arr,c)=>arr.map(([v,l])=>`<option value='${esc(v)}' ${v===c?'selected':''}>${esc(l)}</option>`).join('');
 function filterUI(){
-  const fsO=[...new Set(words.map(w=>fLabel(w.f)))].sort();
+  const fsO=[...new Set(words.map(w=>subj(w)))].sort();
   return `<div class='seg'><select onchange='fl=this.value;render()'>${optH([['all','All levels'],...LV.map(l=>[l,l]),['none','Not in JLPT list']],fl)}</select><select onchange='fp=this.value;render()'>${optH([['all','All types'],...POSL.map(p=>[p,p])],fp)}</select></div>
-<div class='seg'><select onchange='fs=this.value;render()'>${optH([['all','All subjects'],...fsO.map(x=>[x,x])],fs)}</select><select onchange='gb=this.value;render()'>${optH([['none','No grouping'],['lv','Group by JLPT level'],['pos','Group by type'],['f','Group by subject']],gb)}</select></div>
+<div class='seg'><select onchange='fs=this.value;render()'>${optH([['all','All themes'],...fsO.map(x=>[x,x])],fs)}</select><select onchange='gb=this.value;render()'>${optH([['none','No grouping'],['lv','Group by JLPT level'],['pos','Group by type'],['f','Group by theme']],gb)}</select></div>
 ${jl?'':`<p class='note'>JLPT levels could not be loaded (needs an internet connection).</p>`}
 <div class='stp' style='align-items:center'><span class='note' style='flex:none'>Mark shown as</span>${S.map((s,n)=>`<button class='sb ${s}' onclick='bulk(${n})'>${LBL[s]}</button>`).join('')}</div>`}
 function bulk(n){const a=shown();if(!a.length)return;if(!confirm('Mark '+a.length+' shown words as '+LBL[S[n]]+'?'))return;a.forEach(x=>{x.w.st=S[n];x.w.streak=0});save();render()}
@@ -294,4 +414,4 @@ function pick(n){const q=Q.qs[Q.i],w=q.w;Q.sel=n;
 function resolve(yes){const w=Q.qs[Q.i].w;if(yes)w.st='learnt';w.streak=0;Q.ask=false;save();render()}
 function next(){Q.sel=null;Q.i++;if(Q.i>=Q.qs.length)Q.done=true;render()}
 render();
-</script><p class="note" style="text-align:center;padding:0 16px 8px">Build 10 · Dictionary data: JMdict, © Electronic Dictionary Research and Development Group (CC BY-SA 4.0). JLPT levels: Jonathan Waller’s lists via OpenJLPT (CC BY-SA 4.0).</p></body></html>
+</script><p class="note" style="text-align:center;padding:0 16px 8px">Build 12 · Dictionary data: JMdict, © Electronic Dictionary Research and Development Group (CC BY-SA 4.0). JLPT levels: Jonathan Waller’s lists via OpenJLPT (CC BY-SA 4.0).</p></body></html>
