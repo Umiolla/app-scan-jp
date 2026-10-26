@@ -24,7 +24,7 @@ nav button b{display:block;font-size:20px}nav button.on{color:var(--ac);font-wei
 .big{font-size:44px;font-weight:800;text-align:center;margin:12px 0 4px}.cap{text-align:center;color:var(--mut);font-size:14px;margin-bottom:16px}
 .bar{height:6px;background:var(--bd);border-radius:6px;overflow:hidden;margin-bottom:12px}.bar i{display:block;height:100%;background:var(--ac)}
 .seg{display:flex;gap:8px;margin-bottom:12px}.seg button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--card);font-size:14px}.seg button.on{background:var(--ac);color:var(--acf);border-color:var(--ac)}
-.txt{background:var(--bg);border-radius:10px;padding:10px;font-size:18px;line-height:2.4;white-space:pre-wrap;max-height:60vh;overflow:auto}.txt rt{font-size:10px;color:var(--mut)}.tk{cursor:pointer;border-radius:4px}.tk:active{background:var(--bd)}.pop{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--bg);border:1px solid var(--ac);position:sticky;bottom:84px}
+.txt{background:var(--bg);border-radius:10px;padding:10px;font-size:18px;line-height:2.4;white-space:pre-wrap;max-height:60vh;overflow:auto}.txt rt{font-size:10px;color:var(--mut)}select{flex:1;min-width:0;padding:9px 6px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--fg);font:inherit;font-size:14px}.lvt{font-size:11px;font-weight:700;border:1px solid var(--bd);border-radius:6px;padding:0 5px;color:var(--mut)}.tk{cursor:pointer;border-radius:4px}.tk:active{background:var(--bd)}.pop{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--bg);border:1px solid var(--ac);position:sticky;bottom:84px}
 .bd{padding:3px 10px;border-radius:999px;border:1px solid currentColor;font-size:12px;font-weight:600;background:none}.bd.new,.sb.new{color:var(--nw)}.bd.fam,.sb.fam{color:var(--fm)}.bd.learnt,.sb.learnt{color:var(--ok)}
 .stp{display:flex;gap:8px;padding:0 0 12px}.sb{flex:1;padding:12px 4px;border-radius:12px;border:1px solid var(--bd);background:var(--card);font-size:15px;font-weight:600}.sb.on{box-shadow:inset 0 0 0 2px currentColor}
 .fc{min-height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;cursor:pointer;user-select:none}
@@ -41,15 +41,16 @@ textarea{width:100%;min-height:96px;padding:12px;border-radius:12px;border:1px s
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const shuf=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
-let words=[],tab='scan',sample=null,busy=null,error='',ocr='',Q=null,wf='all',wsort=false,wopen=-1,rev={f:'all',i:0,flip:false,deck:[]},tx=0;
+let words=[],tab='scan',sample=null,busy=null,error='',ocr='',Q=null,wf='all',scope='cur',cur=[],fl='all',fp='all',fs='all',gb='none',wsort=false,wopen=-1,rev={f:'all',i:0,flip:false,deck:[]},tx=0;
 const S=['new','fam','learnt'],WF=['all','new','fam','learnt'],LBL={new:'New',fam:'Familiar',learnt:'Learnt'},ORD={new:0,fam:1,learnt:2};
 const st=w=>w.st||'new';
 const quizPool=()=>uniq().filter(w=>st(w)!=='learnt');
 function setSt(w,s){w.st=s;w.streak=0;save()}
 const sb=(cur,fn)=>S.map((s,n)=>`<button class='sb ${s} ${cur===s?'on':''}' onclick='${fn(n)}'>${LBL[s]}</button>`).join('');
 try{words=JSON.parse(localStorage.getItem('ns_words')||'[]')}catch(e){}
+try{cur=JSON.parse(localStorage.getItem('ns_cur')||'[]')}catch(e){}
 const uniq=()=>{const m=new Map();words.forEach(w=>{if(!m.has(w.kanji))m.set(w.kanji,w)});return[...m.values()]};
-const save=()=>{try{localStorage.setItem('ns_words',JSON.stringify(words))}catch(e){}};
+const save=()=>{try{localStorage.setItem('ns_words',JSON.stringify(words));localStorage.setItem('ns_cur',JSON.stringify(cur))}catch(e){}};
 /* ---------- Free engine: Tesseract (OCR) + Kuromoji (words, furigana) + JMdict (meanings) ---------- */
 let tkv=null,tk=null,dict=null,dix=null,kix=null,doc=[],pop=null;
 const hira=s=>(s||'').replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-96));
@@ -83,8 +84,8 @@ const loadDict=()=>dict||(dict=(async()=>{
     const j=JSON.parse(txt);await tick();
     const list=Array.isArray(j)?j:j.words.map(e=>[(e.kanji||[]).map(k=>k.text),e.kana.map(k=>k.text),e.sense.slice(0,2).map(x=>x.gloss.slice(0,2).map(g=>g.text).join(', ')).join('; ')]);
     const d=new Map(),k2=new Map();let n=0;
-    for(const [ks,ka,m] of list){
-      const o={r:ka[0],m};
+    for(const [ks,ka,m,f] of list){
+      const o={r:ka[0],m,f};
       for(const k of ks){if(!d.has(k))d.set(k,o);for(const c of k)if(hasK(c)){let a=k2.get(c);if(!a)k2.set(c,a=[]);if(a.length<40)a.push(o)}}
       for(const k of ka)if(!d.has(k))d.set(k,o);
       if(++n%5000===0){busy='Loading dictionary… '+Math.round(n/list.length*100)+'%';render();await tick()}
@@ -117,6 +118,24 @@ const CJ='[\\u3000-\\u9fff\\uff00-\\uffef]';
 const cleanOcr=t=>t.replace(new RegExp('(?<='+CJ+') +(?='+CJ+')','g'),'')
   .replace(new RegExp('(?<='+CJ+')\\n(?='+CJ+')','g'),'')
   .replace(/^[\s\/|\\\\・.,:;'"`\-_=*#~]{1,3}$/gm,'').replace(/\n{3,}/g,'\n\n').trim();
+const POSMAP={'名詞':'Noun','動詞':'Verb','形容詞':'Adjective','副詞':'Adverb'},POSL=['Noun','Verb','Adjective','Adverb','Other'],LV=['N5','N4','N3','N2','N1'];
+const FIELD={med:'Medicine',law:'Law',comp:'Computing',finc:'Finance',bus:'Business',econ:'Economics',chem:'Chemistry',physics:'Physics',math:'Mathematics',music:'Music',food:'Food',sports:'Sports',mil:'Military',biol:'Biology',bot:'Botany',zool:'Zoology',geol:'Geology',astron:'Astronomy',archit:'Architecture',engr:'Engineering',elec:'Electricity',anat:'Anatomy',pharm:'Pharmacy',Buddh:'Buddhism',Shinto:'Shinto',ling:'Linguistics',gramm:'Grammar',psy:'Psychology',phil:'Philosophy',baseb:'Baseball',sumo:'Sumo',golf:'Golf',stat:'Statistics',print:'Printing',telec:'Telecom',agric:'Agriculture',art:'Art',aviat:'Aviation',geom:'Geometry',mech:'Mechanics',photo:'Photography'};
+const fLabel=f=>f?(FIELD[f]||f):'General';
+let jl=null;
+async function loadJlpt(){
+  try{const c=localStorage.getItem('ns_jlpt');if(c){jl=JSON.parse(c);render();return}}catch(e){}
+  try{const r=await fetch('jlpt.json');if(r.ok){jl=await r.json();render();return}}catch(e){}
+  const m={};let got=0;
+  for(const l of ['n1','n2','n3','n4','n5']){
+    const base=['https://cdn.jsdelivr.net/gh/evanclan/OpenJLPT@main/data/json/vocab/','https://cdn.jsdelivr.net/gh/evanclan/OpenJLPT/data/json/vocab/','https://raw.githubusercontent.com/evanclan/OpenJLPT/main/data/json/vocab/'];
+    for(const b of base){
+      try{const r=await fetch(b+l+'.json');if(!r.ok)continue;const j=await r.json();
+        const arr=Array.isArray(j)?j:(j.vocab||j.words||j.data||[]);
+        arr.forEach(e=>{if(e&&e.word)m[e.word]=String(e.level||l).toUpperCase()});got++;break}catch(e){}
+    }
+  }
+  if(got){jl=m;try{localStorage.setItem('ns_jlpt',JSON.stringify(m))}catch(e){}render()}
+}
 const WORDPOS=['名詞','動詞','形容詞','副詞'];
 async function scan(f,text){
   if(!f&&!text)return;error='';
@@ -125,30 +144,32 @@ async function scan(f,text){
       const img=await prep(f);let lp=-1;
       const w=await withTimeout(Tesseract.createWorker('jpn',1,{logger:m=>{const q=Math.round((m.progress||0)*100);if(q!==lp){lp=q;busy='Reading the image: '+m.status+' '+q+'%';render()}}}),240000,'Downloading the Japanese language data');
       try{await w.setParameters({preserve_interword_spaces:'0',user_defined_dpi:'300'});
-        const r=await withTimeout(w.recognize(img),240000,'Reading the image');text=cleanOcr(r.data.text)}finally{w.terminate()}}
+        const r=await withTimeout(w.recognize(img),240000,'Reading the image');const L=(r.data.lines||[]).filter(l=>l.confidence>=40).map(l=>l.text.trim()).join('\n');text=cleanOcr(L.length>5?L:r.data.text)}finally{w.terminate()}}
     busy='Splitting words and adding furigana…';render();
     busy='Loading the word splitter (first time ~10-30 s)…';render();
     const t=await withTimeout(loadTk(),150000,'Loading the word splitter');
     await withTimeout(loadDict(),90000,'Loading the dictionary');
+    words.forEach(w=>{if(!w.pos){try{w.pos=POSMAP[t.tokenize(w.kanji)[0].pos]||'Other'}catch(e){w.pos='Other'}}});
     const toks=t.tokenize(text);
     if(!toks.some(k=>hasK(k.surface_form)))throw new Error('No kanji text found. Try a sharper photo, or copy the text with Google Lens and paste it.');
     doc=toks.map(k=>({s:k.surface_form,f:furiTok(k),b:k.basic_form,r:k.reading}));pop=null;
-    words=uniq();const seen=new Set(words.map(w=>w.kanji));
+    words=uniq();const seen=new Set(words.map(w=>w.kanji)),curS=new Set();
     for(const k of toks){
       if(!hasK(k.surface_form)||!WORDPOS.includes(k.pos)||['非自立','接尾','数'].includes(k.pos_detail_1))continue;
       const b=k.basic_form&&k.basic_form!=='*'?k.basic_form:k.surface_form;
-      if(!hasK(b)||seen.has(b))continue;seen.add(b);
-      const e=lookup(b);
-      words.push({kanji:b,reading:e?e.r:hira(k.reading),meaning:e?e.m:'—',distractors:[]});
+      if(!hasK(b))continue;
+      const e=lookup(b);if(dix&&!e)continue;
+      curS.add(b);if(seen.has(b))continue;seen.add(b);
+      words.push({kanji:b,reading:e?e.r:hira(k.reading),meaning:e?e.m:'—',distractors:[],pos:POSMAP[k.pos]||'Other',f:(e&&e.f)||''});
     }
-    save();tab='words';
+    cur=[...curS];scope='cur';wf='all';save();tab='words';
   }catch(e){error=e.message||'Something went wrong.';if(!tkv)tk=null}
   busy=null;render();
 }
 function tap(i){const t=doc[i],b=t.b&&t.b!=='*'?t.b:t.s,e=lookup(b)||lookup(t.s);
   pop={s:t.s,b,r:e?e.r:hira(t.r),m:e?e.m:'(no dictionary entry)'};render()}
 const popCard=()=>`<div class="pop"><div style="font-size:22px;font-weight:700">${esc(pop.b)}${pop.b!==pop.s?` <span class="note">(${esc(pop.s)})</span>`:''}</div><div>${esc(pop.r)}</div><div class="note" style="font-size:15px">${esc(pop.m)}</div></div>`;
-render();loadDict();
+render();loadDict();loadJlpt();
 
 const DEMO=[["準備","じゅんび","preparation",["arrangement","planning","practice"]],["経験","けいけん","experience",["experiment","examination","management"]],["約束","やくそく","promise",["reservation","contract","condition"]],["注意","ちゅうい","caution, attention",["intention","meaning","opinion"]],["会議","かいぎ","meeting",["society","council election","discussion class"]],["場合","ばあい","case, situation",["place","combination","opportunity"]],["意味","いみ","meaning",["interest","attention","sense of taste"]],["習慣","しゅうかん","habit, custom",["learning","weekly magazine","exchange"]]].map(([kanji,reading,meaning,distractors])=>({kanji,reading,meaning,distractors}));
 
@@ -204,20 +225,44 @@ ${busy?`<div class="card"><span class="spin"></span>${busy}</div>`:''}${error?`<
 <div class="card"><div class="note" style="margin-bottom:8px">Or paste Japanese text</div><textarea id="pt" placeholder="日本語のテキストをここに貼り付け…"></textarea><button class="btn pri" style="margin:0" onclick="scan(null,document.getElementById('pt').value.trim())">Analyse pasted text</button></div>
 <button class="btn" onclick="demo()">Try with demo words</button>
 <p class="note">Tip: for the best accuracy, copy the text with Google Lens and paste it below. Kanji, hiragana and katakana are detected, split into vocabulary, and turned into quizzes. ${words.length?`You have ${words.length} saved words.`:''}</p>`}
-function demo(){const s=new Set(words.map(w=>w.kanji));DEMO.forEach(w=>{if(!s.has(w.kanji))words.push(w)});save();tab='words';render()}
+function demo(){const s=new Set(words.map(w=>w.kanji));DEMO.forEach(w=>{if(!s.has(w.kanji))words.push(w)});cur=DEMO.map(w=>w.kanji);scope='cur';save();tab='words';render()}
 function vWords(){
   if(!words.length)return`<h1>Words</h1><p class="sub">Nothing here yet. Scan some text first.</p><button class="btn pri" onclick="go('scan')">Go to Scan</button>`;
-  return`<h1>Vocabulary</h1><p class="sub">${words.length} unique words</p>${dix?'':`<p class="err">${esc(dictMsg||'Dictionary file jmdict.json not found, so meanings are empty. See README.')}</p>`}
+  return`<h1>Vocabulary</h1><div class='seg'><button class='${scope==='cur'?'on':''}' onclick='setScope(0)'>This text (${words.filter(w=>cur.includes(w.kanji)).length})</button><button class='${scope==='all'?'on':''}' onclick='setScope(1)'>All words (${words.length})</button></div>${dix?'':`<p class="err">${esc(dictMsg||'Dictionary file jmdict.json not found, so meanings are empty. See README.')}</p>`}
 ${doc.length?`<div class="card"><div class="note">Text with furigana · tap a word for its meaning</div><div class="txt">${doc.map((t,i)=>`<span class="tk" onclick="tap(${i})">${furi(t.f)}</span>`).join('')}</div>${pop?popCard():''}</div>`:''}
-<div class='seg'>${WF.map((k,n)=>`<button class='${wf===k?'on':''}' onclick='setWF(${n})'>${k==='all'?'All':LBL[k]} ${k==='all'?words.length:words.filter(w=>st(w)===k).length}</button>`).join('')}<button class='${wsort?'on':''}' onclick='wsort=!wsort;render()'>Sort ↕</button></div>
-<div class='card' style='padding:4px 16px'>${wlist()||'<p class=note>No words with this status.</p>'}</div>
+<div class='seg'>${WF.map((k,n)=>`<button class='${wf===k?'on':''}' onclick='setWF(${n})'>${k==='all'?'All':LBL[k]} ${k==='all'?sc().length:sc().filter(w=>st(w)===k).length}</button>`).join('')}<button class='${wsort?'on':''}' onclick='wsort=!wsort;render()'>Sort ↕</button></div>
+${filterUI()}<div class='card' style='padding:4px 16px'>${wlist()||'<p class=note>No words with this status.</p>'}</div>
 <button class="btn pri" onclick="startQuiz('mixed')">Quiz me on these</button>
-<button class="btn" onclick="if(confirm('Clear all words?')){words=[];ocr='';Q=null;save();render()}">Clear list</button>`}
+<button class="btn" onclick="if(confirm('Clear all words?')){words=[];cur=[];doc=[];ocr='';Q=null;save();render()}">Clear list</button>`}
+const sc=()=>scope==='cur'&&cur.length?words.filter(w=>cur.includes(w.kanji)):words;
+const setScope=n=>{scope=n?'all':'cur';wopen=-1;render()};
 const setWF=n=>{wf=WF[n];wopen=-1;render()};
 const chg=(i,n)=>{setSt(words[i],S[n]);wopen=-1;render()};
+const lvOf=w=>(jl&&jl[w.kanji])||'';
+function shown(){
+  if(dix){let ch=0;words.forEach(w=>{if(noM(w)){const e=lookup(w.kanji);if(e){w.meaning=e.m;w.reading=e.r;ch=1}}if(w.f===undefined){const e=lookup(w.kanji);if(e){w.f=e.f||'';ch=1}}});if(ch)save()}
+  const a=words.map((w,i)=>({w,i})).filter(x=>(scope!=='cur'||!cur.length||cur.includes(x.w.kanji))&&(wf==='all'||st(x.w)===wf)&&(fl==='all'||(fl==='none'?!lvOf(x.w):lvOf(x.w)===fl))&&(fp==='all'||(x.w.pos||'Other')===fp)&&(fs==='all'||fLabel(x.w.f)===fs));
+  if(wsort)a.sort((p,q)=>ORD[st(p.w)]-ORD[st(q.w)]);
+  return a}
+const row=(w,i)=>`<div class='w'><div class='k'>${ruby(w)}</div><div class='m'>${lvOf(w)?`<span class='lvt'>${lvOf(w)}</span> `:''}${esc(w.meaning)}</div><button class='bd ${st(w)}' onclick='wopen=wopen===${i}?-1:${i};render()'>${LBL[st(w)]}</button><button class='sp' onclick='speak(words[${i}].kanji)' aria-label='Play'>🔊</button></div>${wopen===i?`<div class='stp'>${sb(st(w),n=>`chg(${i},${n})`)}</div>`:''}`;
 function wlist(){
-  if(dix){let ch=0;words.forEach(w=>{if(noM(w)){const e=lookup(w.kanji);if(e){w.meaning=e.m;w.reading=e.r;ch=1}}});if(ch)save()}let a=words.map((w,i)=>({w,i})).filter(x=>wf==='all'||st(x.w)===wf);if(wsort)a.sort((p,q)=>ORD[st(p.w)]-ORD[st(q.w)]);
-  return a.map(({w,i})=>`<div class='w'><div class='k'>${ruby(w)}</div><div class='m'>${esc(w.meaning)}</div><button class='bd ${st(w)}' onclick='wopen=wopen===${i}?-1:${i};render()'>${LBL[st(w)]}</button><button class='sp' onclick='speak(words[${i}].kanji)' aria-label='Play'>🔊</button></div>${wopen===i?`<div class='stp'>${sb(st(w),n=>`chg(${i},${n})`)}</div>`:''}`).join('')}
+  const a=shown();if(!a.length)return'';
+  if(gb==='none')return a.map(x=>row(x.w,x.i)).join('');
+  const key=w=>gb==='lv'?(lvOf(w)||'Not in JLPT list'):gb==='pos'?(w.pos||'Other'):fLabel(w.f);
+  const g=new Map();a.forEach(x=>{const k=key(x.w);if(!g.has(k))g.set(k,[]);g.get(k).push(x)});
+  let ks=[...g.keys()];
+  if(gb==='lv')ks.sort((x,y)=>(LV.indexOf(x)<0?9:LV.indexOf(x))-(LV.indexOf(y)<0?9:LV.indexOf(y)));
+  else if(gb==='pos')ks.sort((x,y)=>POSL.indexOf(x)-POSL.indexOf(y));
+  else ks.sort();
+  return ks.map(k=>`<div class='note' style='margin:14px 0 2px;font-weight:700'>${esc(k)} · ${g.get(k).length}</div>`+g.get(k).map(x=>row(x.w,x.i)).join('')).join('')}
+const optH=(arr,c)=>arr.map(([v,l])=>`<option value='${esc(v)}' ${v===c?'selected':''}>${esc(l)}</option>`).join('');
+function filterUI(){
+  const fsO=[...new Set(words.map(w=>fLabel(w.f)))].sort();
+  return `<div class='seg'><select onchange='fl=this.value;render()'>${optH([['all','All levels'],...LV.map(l=>[l,l]),['none','Not in JLPT list']],fl)}</select><select onchange='fp=this.value;render()'>${optH([['all','All types'],...POSL.map(p=>[p,p])],fp)}</select></div>
+<div class='seg'><select onchange='fs=this.value;render()'>${optH([['all','All subjects'],...fsO.map(x=>[x,x])],fs)}</select><select onchange='gb=this.value;render()'>${optH([['none','No grouping'],['lv','Group by JLPT level'],['pos','Group by type'],['f','Group by subject']],gb)}</select></div>
+${jl?'':`<p class='note'>JLPT levels could not be loaded (needs an internet connection).</p>`}
+<div class='stp' style='align-items:center'><span class='note' style='flex:none'>Mark shown as</span>${S.map((s,n)=>`<button class='sb ${s}' onclick='bulk(${n})'>${LBL[s]}</button>`).join('')}</div>`}
+function bulk(n){const a=shown();if(!a.length)return;if(!confirm('Mark '+a.length+' shown words as '+LBL[S[n]]+'?'))return;a.forEach(x=>{x.w.st=S[n];x.w.streak=0});save();render()}
 function buildDeck(){rev.deck=words.filter(w=>rev.f==='all'||st(w)===rev.f);rev.i=0;rev.flip=false}
 const setRF=n=>{rev.f=WF[n];buildDeck();render()};
 const mv=d=>{rev.i=Math.max(0,rev.i+d);rev.flip=false;render()};
@@ -249,4 +294,4 @@ function pick(n){const q=Q.qs[Q.i],w=q.w;Q.sel=n;
 function resolve(yes){const w=Q.qs[Q.i].w;if(yes)w.st='learnt';w.streak=0;Q.ask=false;save();render()}
 function next(){Q.sel=null;Q.i++;if(Q.i>=Q.qs.length)Q.done=true;render()}
 render();
-</script><p class="note" style="text-align:center;padding:0 16px 8px">Build 8 · Dictionary data: JMdict, © Electronic Dictionary Research and Development Group (CC BY-SA 4.0).</p></body></html>
+</script><p class="note" style="text-align:center;padding:0 16px 8px">Build 10 · Dictionary data: JMdict, © Electronic Dictionary Research and Development Group (CC BY-SA 4.0). JLPT levels: Jonathan Waller’s lists via OpenJLPT (CC BY-SA 4.0).</p></body></html>
